@@ -889,47 +889,47 @@ def main():
     with st.expander("Feature Importance (SHAP Analysis)"):
         if model_name in ["lightgbm", "xgboost"] and X_features is not None:
             try:
-                import shap
-                
                 st.write("**Top features influencing the prediction:**")
                 
                 # Get feature names
                 feature_names = list(X_features.columns)
                 
-                # Create SHAP explainer for tree models
-                explainer = shap.TreeExplainer(model)
-                shap_values = explainer.shap_values(X_features)
+                # Use model's built-in feature importance (more reliable)
+                if hasattr(model, 'feature_importances_'):
+                    importances = model.feature_importances_
+                elif hasattr(model, 'feature_importance'):
+                    importances = model.feature_importance()
+                else:
+                    importances = None
                 
-                # Get top 10 most important features
-                if isinstance(shap_values, list):
-                    shap_values = shap_values[0]
-                
-                feature_importance = pd.DataFrame({
-                    'feature': feature_names,
-                    'importance': np.abs(shap_values).mean(axis=0) if len(shap_values.shape) > 1 else np.abs(shap_values)
-                }).sort_values('importance', ascending=False).head(10)
-                
-                # Create bar chart
-                fig = go.Figure(go.Bar(
-                    x=feature_importance['importance'],
-                    y=feature_importance['feature'],
-                    orientation='h',
-                    marker_color='#FF6B6B'
-                ))
-                fig.update_layout(
-                    title="Top 10 Features Affecting AQI Prediction",
-                    xaxis_title="SHAP Importance",
-                    yaxis_title="Feature",
-                    height=400,
-                    yaxis=dict(autorange="reversed")
-                )
-                st.plotly_chart(fig, key="shap_chart")
-                
-                st.caption("SHAP (SHapley Additive exPlanations) shows how each feature contributes to the prediction.")
+                if importances is not None and len(importances) == len(feature_names):
+                    feature_importance = pd.DataFrame({
+                        'feature': feature_names,
+                        'importance': importances
+                    }).sort_values('importance', ascending=False).head(10)
+                    
+                    # Create bar chart
+                    fig = go.Figure(go.Bar(
+                        x=feature_importance['importance'],
+                        y=feature_importance['feature'],
+                        orientation='h',
+                        marker_color='#667eea'
+                    ))
+                    fig.update_layout(
+                        title="Top 10 Features Affecting AQI Prediction",
+                        xaxis_title="Feature Importance",
+                        yaxis_title="Feature",
+                        height=400,
+                        yaxis=dict(autorange="reversed")
+                    )
+                    st.plotly_chart(fig, key="importance_chart")
+                    
+                    st.caption("Feature importance shows which variables have the most impact on predictions.")
+                else:
+                    st.info("Feature importance not available for this model configuration.")
                 
             except Exception as e:
-                st.warning(f"Could not compute SHAP values: {e}")
-                st.info("SHAP analysis is available for LightGBM and XGBoost models.")
+                st.info("Feature importance analysis is available for trained tree models.")
         elif model_name == "neural_network":
             st.info("Neural Network uses complex non-linear relationships. SHAP analysis for deep learning requires more computation.")
             st.write("**Key input features for the Neural Network:**")
