@@ -618,7 +618,7 @@ def main():
     
     # Show last update time
     now = datetime.now()
-    st.caption(f"Last updated: {now.strftime('%Y-%m-%d %H:%M:%S')} (Auto-refreshes every hour)")
+    st.caption(f"Last updated: {now.strftime('%H:%M:%S')} | Auto-refreshes every hour")
     
     st.divider()
     
