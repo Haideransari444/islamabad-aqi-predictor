@@ -35,21 +35,6 @@ if not OPENWEATHER_API_KEY:
     except:
         pass
 
-# Get Hopsworks credentials
-HOPSWORKS_API_KEY = os.getenv("HOPSWORKS_API_KEY")
-if not HOPSWORKS_API_KEY:
-    try:
-        HOPSWORKS_API_KEY = st.secrets.get("HOPSWORKS_API_KEY")
-    except:
-        pass
-
-HOPSWORKS_PROJECT = os.getenv("HOPSWORKS_PROJECT_NAME", "api_predictor")
-if not HOPSWORKS_PROJECT or HOPSWORKS_PROJECT == "api_predictor":
-    try:
-        HOPSWORKS_PROJECT = st.secrets.get("HOPSWORKS_PROJECT_NAME", "api_predictor")
-    except:
-        pass
-
 # Islamabad coordinates
 ISLAMABAD_LAT = 33.6844
 ISLAMABAD_LON = 73.0479
@@ -57,7 +42,7 @@ ISLAMABAD_LON = 73.0479
 # Page config
 st.set_page_config(
     page_title="Islamabad AQI Predictor",
-    page_icon="🌬️",
+    page_icon="",
     layout="wide"
 )
 
@@ -222,94 +207,54 @@ def get_health_advisory(aqi: float) -> tuple:
 
 
 @st.cache_resource
-def get_hopsworks_connection():
-    """Get Hopsworks connection (cached)."""
-    if not HOPSWORKS_API_KEY:
-        return None, None, None
-    
-    try:
-        import hopsworks
-        project = hopsworks.login(
-            api_key_value=HOPSWORKS_API_KEY,
-            project=HOPSWORKS_PROJECT
-        )
-        fs = project.get_feature_store()
-        mr = project.get_model_registry()
-        return project, fs, mr
-    except Exception as e:
-        st.warning(f"Could not connect to Hopsworks: {e}")
-        return None, None, None
-
-
-@st.cache_resource
 def load_predictor(model_name: str):
-    """Load the predictor from Hopsworks Model Registry."""
+    """Load the predictor from local files."""
     import joblib
     import json
-    import tempfile
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF warnings
     
     try:
-        # Try Hopsworks Model Registry first
-        project, fs, mr = get_hopsworks_connection()
-        
-        if mr is not None:
-            try:
-                # Map model names to Hopsworks model names
-                hopsworks_model_name = f"islamabad_aqi_{model_name}"
-                
-                # Get the model from registry
-                model_obj = mr.get_model(hopsworks_model_name, version=1)
-                model_dir = model_obj.download()
-                
-                # Load model based on type
-                if model_name == "neural_network":
-                    import tensorflow as tf
-                    tf.get_logger().setLevel('ERROR')
-                    model = tf.keras.models.load_model(Path(model_dir) / "model.h5", compile=False)
-                    model.compile(optimizer='adam', loss='mse')
-                else:
-                    model = joblib.load(Path(model_dir) / "model.joblib")
-                
-                scaler = None
-                scaler_path = Path(model_dir) / "scaler.joblib"
-                if scaler_path.exists():
-                    scaler = joblib.load(scaler_path)
-                
-                metadata = json.loads((Path(model_dir) / "metadata.json").read_text())
-                
-                return model, scaler, metadata
-                
-            except Exception as e:
-                st.warning(f"Could not load {model_name} from Hopsworks: {e}")
-        
-        # Fallback to local files
         model_dir = PROJECT_ROOT / "models" / model_name
         latest_file = model_dir / "latest.txt"
         
         if not latest_file.exists():
+            st.warning(f"Model {model_name}: latest.txt not found")
             return None, None, None
         
         version = latest_file.read_text().strip()
         version_dir = model_dir / version
         
         if not version_dir.exists():
+            st.warning(f"Model {model_name}: version directory not found")
             return None, None, None
         
         # Load model based on type
         if model_name == "neural_network":
-            import tensorflow as tf
-            tf.get_logger().setLevel('ERROR')
-            model = tf.keras.models.load_model(version_dir / "model.h5", compile=False)
-            model.compile(optimizer='adam', loss='mse')
+            try:
+                import tensorflow as tf
+                tf.get_logger().setLevel('ERROR')
+                model = tf.keras.models.load_model(version_dir / "model.h5", compile=False)
+                model.compile(optimizer='adam', loss='mse')
+            except Exception as e:
+                st.warning(f"Error loading Neural Network: {e}")
+                return None, None, None
         else:
-            model = joblib.load(version_dir / "model.joblib")
+            try:
+                model = joblib.load(version_dir / "model.joblib")
+            except Exception as e:
+                st.warning(f"Error loading model {model_name}: {e}")
+                return None, None, None
         
         scaler = None
-        if (version_dir / "scaler.joblib").exists():
-            scaler = joblib.load(version_dir / "scaler.joblib")
+        scaler_file = version_dir / "scaler.joblib"
+        if scaler_file.exists():
+            scaler = joblib.load(scaler_file)
         
-        metadata = json.loads((version_dir / "metadata.json").read_text())
+        metadata_file = version_dir / "metadata.json"
+        if metadata_file.exists():
+            metadata = json.loads(metadata_file.read_text())
+        else:
+            metadata = {"model_type": model_name}
         
         return model, scaler, metadata
         
@@ -320,21 +265,9 @@ def load_predictor(model_name: str):
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_historical_data():
-    """Load historical data from Hopsworks Feature Store."""
+    """Load historical data from local files."""
     try:
-        # Try Hopsworks Feature Store first
-        project, fs, mr = get_hopsworks_connection()
-        
-        if fs is not None:
-            try:
-                fg = fs.get_feature_group("islamabad_aqi_features", version=1)
-                df = fg.read()
-                df = df.dropna()
-                return df
-            except Exception as e:
-                st.warning(f"Could not load from Hopsworks Feature Store: {e}")
-        
-        # Fallback to local files
+        # Try parquet first, then CSV
         parquet_path = PROJECT_ROOT / "data" / "processed" / "islamabad_features.parquet"
         csv_path = PROJECT_ROOT / "data" / "processed" / "islamabad_aqi_features_upload.csv"
         
