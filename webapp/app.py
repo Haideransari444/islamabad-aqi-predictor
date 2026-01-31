@@ -46,17 +46,73 @@ st.set_page_config(
     layout="wide"
 )
 
-# Auto-refresh every hour (3600 seconds)
-st.markdown(
-    """
-    <script>
-        setTimeout(function(){
-            window.location.reload();
-        }, 3600000);
-    </script>
-    """,
-    unsafe_allow_html=True
-)
+# Custom CSS for animations and styling
+st.markdown("""
+<style>
+    /* Fade in animation */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Pulse animation for AQI values */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    /* Gradient background animation */
+    @keyframes gradientFlow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    .stMetric {
+        animation: fadeIn 0.6s ease-out;
+    }
+    
+    .stMetric:hover {
+        animation: pulse 0.5s ease-in-out;
+    }
+    
+    /* Card hover effects */
+    div[data-testid="stVerticalBlock"] > div {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    /* Smooth transitions */
+    .element-container {
+        animation: fadeIn 0.4s ease-out;
+    }
+    
+    /* Header styling */
+    h1 {
+        background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: gradientFlow 3s ease infinite;
+    }
+    
+    /* Footer styling */
+    .developer-credit {
+        text-align: center;
+        padding: 20px;
+        color: #888;
+        font-size: 0.9em;
+        border-top: 1px solid #333;
+        margin-top: 40px;
+    }
+</style>
+
+<script>
+    setTimeout(function(){
+        window.location.reload();
+    }, 3600000);
+</script>
+""", unsafe_allow_html=True)
 
 # ============================================================
 # API FUNCTIONS - Real-time data fetching
@@ -615,10 +671,11 @@ def main():
     # Header
     st.title("Islamabad AQI Predictor")
     st.markdown("**Pearls Project** — Real-time AQI monitoring with ML predictions")
+    st.caption("Developed by **Muzammil Haider**")
     
     # Show last update time
     now = datetime.now()
-    st.caption(f"Last updated: {now.strftime('%H:%M:%S')} | Auto-refreshes every hour")
+    st.caption(f"Last updated: {now.strftime('%H:%M')} | Auto-refreshes every hour")
     
     st.divider()
     
@@ -637,15 +694,15 @@ def main():
         
         model_choice = st.selectbox(
             "Select Model",
-            ["LightGBM", "Neural Network", "XGBoost"]
+            ["XGBoost", "LightGBM", "Neural Network"]
         )
         
-        if "LightGBM" in model_choice:
-            model_name = "lightgbm"
-        elif "Neural" in model_choice:
-            model_name = "neural_network"
-        else:
+        if "XGBoost" in model_choice:
             model_name = "xgboost"
+        elif "LightGBM" in model_choice:
+            model_name = "lightgbm"
+        else:
+            model_name = "neural_network"
         
         st.divider()
         
@@ -882,6 +939,14 @@ def main():
             st.write("- Rolling statistics (mean, std)")
         else:
             st.info("Select LightGBM or XGBoost to see SHAP feature importance.")
+    
+    # Footer
+    st.markdown("""
+    <div class='developer-credit'>
+        <p>Developed by <strong>Muzammil Haider</strong></p>
+        <p style='font-size: 0.8em; opacity: 0.7;'>Pearls Project | Islamabad AQI Predictor</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
