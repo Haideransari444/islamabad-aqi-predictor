@@ -193,17 +193,17 @@ def get_aqi_category(aqi: float) -> str:
 def get_health_advisory(aqi: float) -> tuple:
     """Get health advisory message and type."""
     if aqi <= 50:
-        return "success", "✅ Air quality is excellent! Perfect for outdoor activities."
+        return "success", "Air quality is excellent. Perfect for outdoor activities."
     elif aqi <= 100:
-        return "info", "ℹ️ Air quality is acceptable. Sensitive individuals should limit prolonged outdoor exertion."
+        return "info", "Air quality is acceptable. Sensitive individuals should limit prolonged outdoor exertion."
     elif aqi <= 150:
-        return "warning", "⚠️ Unhealthy for sensitive groups. Children, elderly, and those with respiratory issues should limit outdoor activities."
+        return "warning", "Unhealthy for sensitive groups. Children, elderly, and those with respiratory issues should limit outdoor activities."
     elif aqi <= 200:
-        return "warning", "⚠️ Unhealthy! Everyone should reduce prolonged outdoor exertion. Wear masks if going outside."
+        return "warning", "Unhealthy. Everyone should reduce prolonged outdoor exertion. Wear masks if going outside."
     elif aqi <= 300:
-        return "error", "🚨 Very Unhealthy! Avoid all outdoor activities. Keep windows closed."
+        return "error", "Very Unhealthy. Avoid all outdoor activities. Keep windows closed."
     else:
-        return "error", "🚨 HAZARDOUS! Health emergency. Stay indoors, use air purifiers, and avoid all outdoor exposure."
+        return "error", "HAZARDOUS. Health emergency. Stay indoors, use air purifiers, and avoid all outdoor exposure."
 
 
 @st.cache_resource
@@ -448,33 +448,192 @@ def create_forecast_chart(forecasts: list) -> go.Figure:
 
 
 # ============================================================
+# COMPARISON PAGE - All 3 Models
+# ============================================================
+
+def show_comparison_page(current_aqi_data, current_weather, historical_df):
+    """Show comparison of all 3 models."""
+    st.subheader("Model Comparison")
+    st.caption("Comparing predictions from all 3 ML models")
+    
+    # Current AQI display
+    current_aqi = current_aqi_data['aqi']
+    current_pm25 = current_aqi_data['pm2_5']
+    current_temp = current_weather['temp'] if current_weather else 0
+    current_humidity = current_weather['humidity'] if current_weather else 0
+    
+    # Current conditions row
+    st.markdown("### Current Conditions")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Temperature", f"{current_temp:.1f}°C")
+    with col2:
+        st.metric("Humidity", f"{current_humidity:.0f}%")
+    with col3:
+        st.metric("PM2.5", f"{current_pm25:.1f} µg/m³")
+    with col4:
+        color = get_aqi_color(current_aqi)
+        st.metric("Current AQI", f"{current_aqi:.0f}")
+    
+    st.divider()
+    
+    # Load all 3 models and make predictions
+    models_data = []
+    model_names = ["lightgbm", "xgboost", "neural_network"]
+    display_names = ["LightGBM", "XGBoost", "Neural Network"]
+    
+    for model_name, display_name in zip(model_names, display_names):
+        model, scaler, metadata = load_predictor(model_name)
+        
+        if model is not None:
+            X_features = prepare_features_for_prediction(current_aqi_data, current_weather, historical_df)
+            
+            if X_features is not None:
+                try:
+                    predicted_aqi = make_prediction(model, scaler, X_features, model_name)
+                except:
+                    predicted_aqi = current_aqi * 1.1
+            else:
+                predicted_aqi = current_aqi * 1.1
+            
+            metrics = metadata.get('metrics', {}) if metadata else {}
+            models_data.append({
+                'name': display_name,
+                'prediction': predicted_aqi,
+                'rmse': metrics.get('rmse', 'N/A'),
+                'r2': metrics.get('r2', 'N/A'),
+                'category': get_aqi_category(predicted_aqi),
+                'color': get_aqi_color(predicted_aqi)
+            })
+        else:
+            models_data.append({
+                'name': display_name,
+                'prediction': None,
+                'rmse': 'N/A',
+                'r2': 'N/A',
+                'category': 'Not Available',
+                'color': '#666666'
+            })
+    
+    # Display current AQI gauge
+    st.markdown("### Current AQI (Live)")
+    fig = create_gauge(current_aqi, "Current")
+    st.plotly_chart(fig, use_container_width=True, key="current_gauge")
+    
+    st.divider()
+    
+    # Display all 3 predictions side by side
+    st.markdown("### Model Predictions (Next Hour)")
+    
+    col1, col2, col3 = st.columns(3)
+    columns = [col1, col2, col3]
+    
+    for i, (col, data) in enumerate(zip(columns, models_data)):
+        with col:
+            if data['prediction'] is not None:
+                st.markdown(f"""
+                <div style='padding: 20px; border-radius: 10px; background: linear-gradient(135deg, {data['color']}22, {data['color']}44); border: 2px solid {data['color']}; text-align: center;'>
+                    <h3 style='margin:0; color: #ffffff;'>{data['name']}</h3>
+                    <p style='font-size: 2.5em; margin: 10px 0; color: {data['color']}'><b>{data['prediction']:.0f}</b></p>
+                    <p style='margin:0; font-size: 1.1em;'>{data['category']}</p>
+                    <hr style='border-color: {data['color']}33; margin: 10px 0;'>
+                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>RMSE: {data['rmse']:.2f if isinstance(data['rmse'], float) else data['rmse']}</p>
+                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>R²: {data['r2']:.3f if isinstance(data['r2'], float) else data['r2']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning(f"{data['name']}: Model not available")
+    
+    st.divider()
+    
+    # Comparison chart
+    st.markdown("### Visual Comparison")
+    
+    # Bar chart comparing predictions
+    valid_models = [d for d in models_data if d['prediction'] is not None]
+    
+    if valid_models:
+        fig = go.Figure()
+        
+        # Add current AQI bar
+        fig.add_trace(go.Bar(
+            x=['Current AQI'],
+            y=[current_aqi],
+            name='Current',
+            marker_color=get_aqi_color(current_aqi),
+            text=[f"{current_aqi:.0f}"],
+            textposition='outside'
+        ))
+        
+        # Add model predictions
+        for data in valid_models:
+            fig.add_trace(go.Bar(
+                x=[data['name']],
+                y=[data['prediction']],
+                name=data['name'],
+                marker_color=data['color'],
+                text=[f"{data['prediction']:.0f}"],
+                textposition='outside'
+            ))
+        
+        fig.update_layout(
+            title="Current AQI vs Model Predictions",
+            yaxis_title="AQI Value",
+            height=400,
+            showlegend=False,
+            yaxis=dict(range=[0, max([current_aqi] + [d['prediction'] for d in valid_models]) + 50])
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="comparison_chart")
+    
+    # Model accuracy table
+    st.markdown("### Model Performance Metrics")
+    
+    metrics_df = pd.DataFrame([
+        {
+            'Model': d['name'],
+            'Predicted AQI': f"{d['prediction']:.0f}" if d['prediction'] else 'N/A',
+            'RMSE': f"{d['rmse']:.2f}" if isinstance(d['rmse'], float) else d['rmse'],
+            'R² Score': f"{d['r2']:.3f}" if isinstance(d['r2'], float) else d['r2'],
+            'Category': d['category']
+        }
+        for d in models_data
+    ])
+    
+    st.dataframe(metrics_df, use_container_width=True, hide_index=True)
+
+
+# ============================================================
 # MAIN APP
 # ============================================================
 
 def main():
     # Header
-    st.title("🌬️ Islamabad AQI Predictor")
+    st.title("Islamabad AQI Predictor")
     st.markdown("**Pearls Project** — Real-time AQI monitoring with ML predictions")
     
     # Show last update time
     now = datetime.now()
-    st.caption(f"🕐 Last updated: {now.strftime('%Y-%m-%d %H:%M:%S')} (Auto-refreshes every hour)")
+    st.caption(f"Last updated: {now.strftime('%Y-%m-%d %H:%M:%S')} (Auto-refreshes every hour)")
     
     st.divider()
     
     # Sidebar
     with st.sidebar:
-        st.header("⚙️ Settings")
-        st.info("📍 **Islamabad, Pakistan**")
+        st.header("Settings")
+        st.info("Islamabad, Pakistan")
         
         # Manual refresh button
-        if st.button("🔄 Refresh Data Now"):
+        if st.button("Refresh Data"):
             st.cache_data.clear()
             st.rerun()
         
+        # Page selection
+        page = st.radio("View", ["Single Model", "Compare All Models"])
+        
         model_choice = st.selectbox(
             "Select Model",
-            ["LightGBM (Recommended)", "Neural Network (Best Accuracy)", "XGBoost"]
+            ["LightGBM", "Neural Network", "XGBoost"]
         )
         
         if "LightGBM" in model_choice:
@@ -486,39 +645,45 @@ def main():
         
         st.divider()
         
-        st.subheader("📊 AQI Scale")
+        st.subheader("AQI Scale")
         st.markdown("""
         | AQI | Category |
         |-----|----------|
-        | 0-50 | 🟢 Good |
-        | 51-100 | 🟡 Moderate |
-        | 101-150 | 🟠 Unhealthy (Sensitive) |
-        | 151-200 | 🔴 Unhealthy |
-        | 201-300 | 🟣 Very Unhealthy |
-        | 300+ | ⚫ Hazardous |
+        | 0-50 | Good |
+        | 51-100 | Moderate |
+        | 101-150 | Unhealthy (Sensitive) |
+        | 151-200 | Unhealthy |
+        | 201-300 | Very Unhealthy |
+        | 300+ | Hazardous |
         """)
     
     # Fetch real-time data from API
-    with st.spinner("🌐 Fetching real-time AQI from OpenWeatherMap..."):
+    with st.spinner("Fetching real-time AQI from OpenWeatherMap..."):
         current_aqi_data = fetch_current_aqi()
         current_weather = fetch_current_weather()
     
-    # Load model and historical data
-    model, scaler, metadata = load_predictor(model_name)
-    historical_df = load_historical_data()
-    
     # Check if we have data
     if current_aqi_data is None:
-        st.error("❌ Could not fetch real-time AQI. Please check your API key.")
-        st.info("💡 Make sure OPENWEATHERMAP_API_KEY is set in your .env file")
+        st.error("Could not fetch real-time AQI. Please check your API key.")
+        st.info("Make sure OPENWEATHERMAP_API_KEY is set in your .env file")
         return
+    
+    historical_df = load_historical_data()
+    
+    # Route to appropriate page
+    if page == "Compare All Models":
+        show_comparison_page(current_aqi_data, current_weather, historical_df)
+        return
+    
+    # Load single model
+    model, scaler, metadata = load_predictor(model_name)
     
     if model is None:
-        st.error("❌ Could not load model. Please check the installation.")
+        st.error("Could not load model. Please check the installation.")
         return
     
-    st.sidebar.success(f"✅ Model: {model_name}")
-    st.sidebar.success(f"✅ API: Connected")
+    st.sidebar.success(f"Model: {model_name}")
+    st.sidebar.success(f"API: Connected")
     
     # Current AQI from API
     current_aqi = current_aqi_data['aqi']
@@ -539,19 +704,19 @@ def main():
         predicted_aqi = current_aqi * 1.1  # Fallback
     
     # Current conditions
-    st.subheader("🌡️ Current Conditions in Islamabad")
+    st.subheader("Current Conditions in Islamabad")
     st.caption(f"Data from: {current_aqi_data['timestamp'].strftime('%Y-%m-%d %H:%M')}")
     
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("🌡️ Temperature", f"{current_temp:.1f}°C")
+        st.metric("Temperature", f"{current_temp:.1f}°C")
     with col2:
-        st.metric("💧 Humidity", f"{current_humidity:.0f}%")
+        st.metric("Humidity", f"{current_humidity:.0f}%")
     with col3:
-        st.metric("🔬 PM2.5", f"{current_pm25:.1f} µg/m³")
+        st.metric("PM2.5", f"{current_pm25:.1f} µg/m³")
     with col4:
         category = get_aqi_category(current_aqi)
-        st.metric("📊 Current AQI", f"{current_aqi:.0f}", delta=category)
+        st.metric("Current AQI", f"{current_aqi:.0f}", delta=category)
     
     st.divider()
     
@@ -559,7 +724,7 @@ def main():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📍 Current AQI (Live)")
+        st.subheader("Current AQI (Live)")
         fig = create_gauge(current_aqi, "Now")
         st.plotly_chart(fig, key="gauge_current")
         color = get_aqi_color(current_aqi)
@@ -567,7 +732,7 @@ def main():
                    unsafe_allow_html=True)
     
     with col2:
-        st.subheader("🔮 Next Hour Prediction")
+        st.subheader("Next Hour Prediction")
         fig = create_gauge(predicted_aqi, "Predicted")
         st.plotly_chart(fig, key="gauge_predicted")
         color = get_aqi_color(predicted_aqi)
@@ -577,7 +742,7 @@ def main():
     st.divider()
     
     # 3-Day Forecast
-    st.subheader("📅 3-Day Forecast")
+    st.subheader("3-Day Forecast")
     
     # Generate forecast based on ML prediction
     forecasts = []
@@ -609,7 +774,7 @@ def main():
             color = get_aqi_color(f['aqi'])
             st.markdown(f"""
             <div style='padding: 15px; border-radius: 10px; background: linear-gradient(135deg, {color}22, {color}44); border-left: 4px solid {color}'>
-                <h4 style='margin:0'>📅 {f['date']}</h4>
+                <h4 style='margin:0'>{f['date']}</h4>
                 <p style='font-size: 2em; margin: 5px 0; color: {color}'><b>{f['aqi']:.0f}</b></p>
                 <p style='margin:0'>{f['category']}</p>
             </div>
@@ -618,7 +783,7 @@ def main():
     st.divider()
     
     # Health Advisory
-    st.subheader("🏥 Health Advisory")
+    st.subheader("Health Advisory")
     max_aqi = max(current_aqi, predicted_aqi, *[f['aqi'] for f in forecasts])
     advisory_type, advisory_msg = get_health_advisory(max_aqi)
     
@@ -633,7 +798,7 @@ def main():
     
     # Pollutant details
     st.divider()
-    with st.expander("🔬 Pollutant Details"):
+    with st.expander("Pollutant Details"):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("PM2.5", f"{current_aqi_data['pm2_5']:.2f} µg/m³")
@@ -646,7 +811,7 @@ def main():
             st.metric("SO₂", f"{current_aqi_data['so2']:.2f} µg/m³")
     
     # Model info
-    with st.expander("ℹ️ Model Information"):
+    with st.expander("Model Information"):
         if metadata:
             col1, col2 = st.columns(2)
             with col1:
@@ -657,10 +822,10 @@ def main():
                 st.write(f"**RMSE:** {metrics.get('rmse', 'N/A'):.2f}")
                 st.write(f"**R²:** {metrics.get('r2', 'N/A'):.3f}")
         
-        st.info("🔄 Data is fetched from OpenWeatherMap API every hour and predictions are updated automatically.")
+        st.info("Data is fetched from OpenWeatherMap API every hour and predictions are updated automatically.")
     
     # SHAP Feature Importance
-    with st.expander("🔍 Feature Importance (SHAP Analysis)"):
+    with st.expander("Feature Importance (SHAP Analysis)"):
         if model_name in ["lightgbm", "xgboost"] and X_features is not None:
             try:
                 import shap
@@ -705,7 +870,7 @@ def main():
                 st.warning(f"Could not compute SHAP values: {e}")
                 st.info("SHAP analysis is available for LightGBM and XGBoost models.")
         elif model_name == "neural_network":
-            st.info("🧠 Neural Network uses complex non-linear relationships. SHAP analysis for deep learning requires more computation.")
+            st.info("Neural Network uses complex non-linear relationships. SHAP analysis for deep learning requires more computation.")
             st.write("**Key input features for the Neural Network:**")
             st.write("- PM2.5 lag values (1h, 3h, 6h, 12h, 24h)")
             st.write("- Temperature and humidity")
