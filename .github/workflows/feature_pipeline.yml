@@ -32,6 +32,9 @@ jobs:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
           HOPSWORKS_PROJECT_NAME: ${{ secrets.HOPSWORKS_PROJECT_NAME }}
         run: |
+          echo "Checking environment variables..."
+          if [ -n "$OPENWEATHERMAP_API_KEY" ]; then echo "OPENWEATHERMAP_API_KEY is set"; else echo "OPENWEATHERMAP_API_KEY is NOT set"; fi
+          if [ -n "$HOPSWORKS_API_KEY" ]; then echo "HOPSWORKS_API_KEY is set"; else echo "HOPSWORKS_API_KEY is NOT set"; fi
           python pipelines/feature_pipeline.py
       
       - name: Upload logs
