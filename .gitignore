@@ -83,7 +83,7 @@ data/backfill/*
 *.h5
 *.pt
 *.pth
-models/
+# models/  # Keep models in repo for Streamlit Cloud deployment
 
 # Logs
 logs/
