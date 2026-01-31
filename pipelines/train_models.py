@@ -428,7 +428,33 @@ def save_model(model: Any, model_name: str, metrics: Dict,
     with open(latest_path, 'w') as f:
         f.write(version)
     
-    print(f"  Saved to: {model_dir}")
+    print(f"  Saved locally to: {model_dir}")
+    
+    # Upload to Hopsworks Model Registry
+    try:
+        import hopsworks
+        
+        project = hopsworks.login(
+            api_key_value=HOPSWORKS_API_KEY,
+            project=HOPSWORKS_PROJECT
+        )
+        mr = project.get_model_registry()
+        
+        # Create model in Hopsworks (simplified - no schema)
+        hopsworks_model = mr.python.create_model(
+            name=f"islamabad_aqi_{model_name}",
+            metrics=metrics,
+            description=f"AQI prediction model for Islamabad - {model_name}"
+        )
+        
+        # Save model directory to Hopsworks
+        hopsworks_model.save(str(model_dir))
+        print(f"  ✅ Uploaded to Hopsworks Model Registry!")
+        
+    except Exception as e:
+        print(f"  ⚠️ Could not upload to Hopsworks: {e}")
+        print(f"  (Model saved locally - Hopsworks upload is optional)")
+    
     return str(model_dir)
 
 
