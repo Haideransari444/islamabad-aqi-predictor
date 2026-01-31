@@ -27,8 +27,13 @@ sys.path.append(str(PROJECT_ROOT))
 # Load environment
 load_dotenv(PROJECT_ROOT / '.env')
 
-# Get API key
+# Get API key - check both environment and Streamlit secrets
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHERMAP_API_KEY")
+if not OPENWEATHER_API_KEY:
+    try:
+        OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHERMAP_API_KEY")
+    except:
+        pass
 
 # Islamabad coordinates
 ISLAMABAD_LAT = 33.6844
