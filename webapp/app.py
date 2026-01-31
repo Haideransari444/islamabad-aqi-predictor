@@ -531,14 +531,18 @@ def show_comparison_page(current_aqi_data, current_weather, historical_df):
     for i, (col, data) in enumerate(zip(columns, models_data)):
         with col:
             if data['prediction'] is not None:
+                rmse_str = f"{data['rmse']:.2f}" if isinstance(data['rmse'], float) else str(data['rmse'])
+                r2_str = f"{data['r2']:.3f}" if isinstance(data['r2'], float) else str(data['r2'])
+                pred_str = f"{data['prediction']:.0f}"
+                
                 st.markdown(f"""
                 <div style='padding: 20px; border-radius: 10px; background: linear-gradient(135deg, {data['color']}22, {data['color']}44); border: 2px solid {data['color']}; text-align: center;'>
                     <h3 style='margin:0; color: #ffffff;'>{data['name']}</h3>
-                    <p style='font-size: 2.5em; margin: 10px 0; color: {data['color']}'><b>{data['prediction']:.0f}</b></p>
+                    <p style='font-size: 2.5em; margin: 10px 0; color: {data['color']}'><b>{pred_str}</b></p>
                     <p style='margin:0; font-size: 1.1em;'>{data['category']}</p>
                     <hr style='border-color: {data['color']}33; margin: 10px 0;'>
-                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>RMSE: {data['rmse']:.2f if isinstance(data['rmse'], float) else data['rmse']}</p>
-                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>R²: {data['r2']:.3f if isinstance(data['r2'], float) else data['r2']}</p>
+                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>RMSE: {rmse_str}</p>
+                    <p style='margin:0; font-size: 0.9em; opacity: 0.8;'>R2: {r2_str}</p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
