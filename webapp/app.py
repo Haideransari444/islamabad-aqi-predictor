@@ -114,6 +114,55 @@ st.markdown("""
 </script>
 """, unsafe_allow_html=True)
 
+# --- Light/Dark mode toggle ---
+if 'theme' not in st.session_state:
+    st.session_state['theme'] = 'light'
+
+def set_theme(theme):
+    st.session_state['theme'] = theme
+
+with st.sidebar:
+    theme = st.radio('Theme', ['Light', 'Dark'], index=0 if st.session_state['theme']=='light' else 1, on_change=lambda: set_theme('light' if st.session_state['theme']=='dark' else 'dark'))
+
+# --- Dynamic CSS for theme ---
+if st.session_state['theme'] == 'light':
+    st.markdown("""
+    <style>
+    body, .stApp {
+        background: #f7fafd !important;
+        color: #222 !important;
+    }
+    .st-bw, .st-cq, .st-dg, .st-e3, .st-em, .st-fk, .st-gd, .st-h2, .st-ib, .st-jb, .st-kd, .st-lb, .st-mb, .st-nb, .st-ob, .st-pb, .st-qb, .st-rb, .st-sb, .st-tb, .st-ub, .st-vb, .st-wb, .st-xb, .st-yb, .st-zb {
+        background: #fff !important;
+        color: #222 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+    body, .stApp {
+        background: #181c24 !important;
+        color: #fff !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- Bright blue title CSS ---
+st.markdown("""
+<style>
+h1 {
+    background: linear-gradient(90deg, #00c6ff, #0072ff, #00c6ff);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientFlow 3s ease infinite;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================================
 # API FUNCTIONS - Real-time data fetching
 # ============================================================
