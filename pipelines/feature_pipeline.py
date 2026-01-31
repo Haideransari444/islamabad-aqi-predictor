@@ -1,11 +1,20 @@
 """
 Feature Pipeline - Scheduled script for hourly feature extraction.
 """
+import os
 import sys
 from pathlib import Path
 from datetime import datetime
 
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Load .env for local development (GitHub Actions uses secrets)
+from dotenv import load_dotenv
+load_dotenv()
+
+# Debug: Print if env vars are set
+print(f"DEBUG: OPENWEATHERMAP_API_KEY set: {bool(os.getenv('OPENWEATHERMAP_API_KEY'))}")
+print(f"DEBUG: HOPSWORKS_API_KEY set: {bool(os.getenv('HOPSWORKS_API_KEY'))}")
 
 from src.features.fetch_data import AQIDataFetcher
 from src.features.compute_features import compute_all_features
