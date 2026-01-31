@@ -71,18 +71,20 @@ venv.bak/
 
 # Data files
 data/raw/*
-data/processed/*
 data/backfill/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/backfill/.gitkeep
+# Keep processed data for Streamlit Cloud
+!data/processed/islamabad_aqi_features_upload.csv
+!data/processed/islamabad_features.parquet
 
-# Model files
-*.pkl
-*.joblib
-*.h5
-*.pt
-*.pth
+# Model files - COMMENTED OUT for Streamlit Cloud deployment
+# *.pkl
+# *.joblib
+# *.h5
+# *.pt
+# *.pth
 # models/  # Keep models in repo for Streamlit Cloud deployment
 
 # Logs

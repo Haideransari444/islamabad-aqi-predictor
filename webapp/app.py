@@ -208,43 +208,70 @@ def load_predictor(model_name: str):
     import json
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TF warnings
     
-    model_dir = PROJECT_ROOT / "models" / model_name
-    latest_file = model_dir / "latest.txt"
-    
-    if not latest_file.exists():
-        return None, None, None
-    
-    version = latest_file.read_text().strip()
-    version_dir = model_dir / version
-    
-    # Load model based on type
-    if model_name == "neural_network":
-        try:
-            import tensorflow as tf
-            tf.get_logger().setLevel('ERROR')
-            model = tf.keras.models.load_model(version_dir / "model.h5", compile=False)
-            model.compile(optimizer='adam', loss='mse')
-        except Exception as e:
-            st.warning(f"Could not load Neural Network: {e}")
+    try:
+        model_dir = PROJECT_ROOT / "models" / model_name
+        latest_file = model_dir / "latest.txt"
+        
+        if not latest_file.exists():
+            st.warning(f"Model {model_name}: latest.txt not found at {latest_file}")
             return None, None, None
-    else:
-        model = joblib.load(version_dir / "model.joblib")
-    
-    scaler = None
-    if (version_dir / "scaler.joblib").exists():
-        scaler = joblib.load(version_dir / "scaler.joblib")
-    
-    metadata = json.loads((version_dir / "metadata.json").read_text())
-    
-    return model, scaler, metadata
+        
+        version = latest_file.read_text().strip()
+        version_dir = model_dir / version
+        
+        if not version_dir.exists():
+            st.warning(f"Model {model_name}: version directory not found at {version_dir}")
+            return None, None, None
+        
+        # Load model based on type
+        if model_name == "neural_network":
+            try:
+                import tensorflow as tf
+                tf.get_logger().setLevel('ERROR')
+                model = tf.keras.models.load_model(version_dir / "model.h5", compile=False)
+                model.compile(optimizer='adam', loss='mse')
+            except Exception as e:
+                st.warning(f"Could not load Neural Network: {e}")
+                return None, None, None
+        else:
+            model_file = version_dir / "model.joblib"
+            if not model_file.exists():
+                st.warning(f"Model {model_name}: model.joblib not found at {model_file}")
+                return None, None, None
+            model = joblib.load(model_file)
+        
+        scaler = None
+        scaler_file = version_dir / "scaler.joblib"
+        if scaler_file.exists():
+            scaler = joblib.load(scaler_file)
+        
+        metadata_file = version_dir / "metadata.json"
+        if not metadata_file.exists():
+            st.warning(f"Model {model_name}: metadata.json not found")
+            return None, None, None
+            
+        metadata = json.loads(metadata_file.read_text())
+        
+        return model, scaler, metadata
+        
+    except Exception as e:
+        st.warning(f"Error loading model {model_name}: {str(e)}")
+        return None, None, None
 
 
 @st.cache_data(ttl=300)  # Cache for 5 minutes
 def load_historical_data():
     """Load historical data for feature engineering."""
-    data_path = PROJECT_ROOT / "data" / "processed" / "islamabad_features.parquet"
-    if data_path.exists():
-        df = pd.read_parquet(data_path)
+    # Try multiple file formats
+    parquet_path = PROJECT_ROOT / "data" / "processed" / "islamabad_features.parquet"
+    csv_path = PROJECT_ROOT / "data" / "processed" / "islamabad_aqi_features_upload.csv"
+    
+    if parquet_path.exists():
+        df = pd.read_parquet(parquet_path)
+        df = df.dropna()
+        return df
+    elif csv_path.exists():
+        df = pd.read_csv(csv_path)
         df = df.dropna()
         return df
     return None
