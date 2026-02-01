@@ -285,21 +285,11 @@ def load_predictor(model_name: str):
             return None, None, None
         
         # Load model based on type
-        if model_name == "neural_network":
-            try:
-                import tensorflow as tf
-                tf.get_logger().setLevel('ERROR')
-                model = tf.keras.models.load_model(version_dir / "model.h5", compile=False)
-                model.compile(optimizer='adam', loss='mse')
-            except Exception as e:
-                st.warning(f"Error loading Neural Network: {e}")
-                return None, None, None
-        else:
-            try:
-                model = joblib.load(version_dir / "model.joblib")
-            except Exception as e:
-                st.warning(f"Error loading model {model_name}: {e}")
-                return None, None, None
+        try:
+            model = joblib.load(version_dir / "model.joblib")
+        except Exception as e:
+            st.warning(f"Error loading model {model_name}: {e}")
+            return None, None, None
         
         scaler = None
         scaler_file = version_dir / "scaler.joblib"
@@ -440,11 +430,8 @@ def make_prediction(model, scaler, X_features: pd.DataFrame, model_name: str = "
         X_scaled = scaler.transform(X)
         X = pd.DataFrame(X_scaled, columns=X_features.columns)
     
-    # Handle different model types
-    if model_name == "neural_network":
-        prediction = model.predict(X.values, verbose=0)[0]
-    else:
-        prediction = model.predict(X)[0]
+    # Handle prediction
+    prediction = model.predict(X)[0]
     
     if hasattr(prediction, '__iter__'):
         prediction = prediction[0]
@@ -535,8 +522,8 @@ def show_comparison_page(current_aqi_data, current_weather, historical_df):
     
     # Load all 3 models and make predictions
     models_data = []
-    model_names = ["lightgbm", "xgboost", "neural_network"]
-    display_names = ["LightGBM", "XGBoost", "Neural Network"]
+    model_names = ["lightgbm", "xgboost", "random_forest"]
+    display_names = ["LightGBM", "XGBoost", "Random Forest"]
     
     for model_name, display_name in zip(model_names, display_names):
         model, scaler, metadata = load_predictor(model_name)
@@ -694,7 +681,7 @@ def main():
         
         model_choice = st.selectbox(
             "Select Model",
-            ["XGBoost", "LightGBM", "Neural Network"]
+            ["XGBoost", "LightGBM", "Random Forest"]
         )
         
         if "XGBoost" in model_choice:
@@ -702,7 +689,7 @@ def main():
         elif "LightGBM" in model_choice:
             model_name = "lightgbm"
         else:
-            model_name = "neural_network"
+            model_name = "random_forest"
         
         st.divider()
         
@@ -930,13 +917,20 @@ def main():
                 
             except Exception as e:
                 st.info("Feature importance analysis is available for trained tree models.")
-        elif model_name == "neural_network":
-            st.info("Neural Network uses complex non-linear relationships. SHAP analysis for deep learning requires more computation.")
-            st.write("**Key input features for the Neural Network:**")
-            st.write("- PM2.5 lag values (1h, 3h, 6h, 12h, 24h)")
-            st.write("- Temperature and humidity")
-            st.write("- Time features (hour, day, month)")
-            st.write("- Rolling statistics (mean, std)")
+        elif model_name == "random_forest":
+            st.info("Random Forest uses ensemble of decision trees.")
+            st.write("**Feature importance for Random Forest:**")
+            try:
+                if hasattr(model, 'named_steps') and hasattr(model.named_steps.get('model', None), 'feature_importances_'):
+                    importances = model.named_steps['model'].feature_importances_
+                    top_features = ['pm2_5_lag_1h', 'pm2_5_lag_3h', 'temp', 'humidity', 'hour', 'pm10_lag_1h']
+                    st.write("- PM2.5 lag values (1h, 3h, 6h, 12h, 24h)")
+                    st.write("- Temperature and humidity")
+                    st.write("- Time features (hour, day, month)")
+            except:
+                st.write("- PM2.5 lag values (1h, 3h, 6h, 12h, 24h)")
+                st.write("- Temperature and humidity")
+                st.write("- Time features (hour, day, month)")
         else:
             st.info("Select LightGBM or XGBoost to see SHAP feature importance.")
     

@@ -31,7 +31,7 @@ class IslamabadAQIPredictor:
         Initialize the predictor.
         
         Args:
-            model_name: Model to use ('lightgbm', 'ridge', or 'neural_network')
+            model_name: Model to use ('lightgbm', 'xgboost', 'random_forest', or 'ridge')
         """
         self.model_name = model_name
         self.model = None
@@ -53,13 +53,8 @@ class IslamabadAQIPredictor:
         version_dir = model_dir / version
         
         # Load model
-        if self.model_name == "neural_network":
-            model_path = version_dir / "model.h5"
-            import tensorflow as tf
-            self.model = tf.keras.models.load_model(model_path)
-        else:
-            model_path = version_dir / "model.joblib"
-            self.model = joblib.load(model_path)
+        model_path = version_dir / "model.joblib"
+        self.model = joblib.load(model_path)
         
         # Load scaler if exists
         scaler_path = version_dir / "scaler.joblib"
