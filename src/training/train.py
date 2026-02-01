@@ -48,7 +48,7 @@ def load_training_data(
 
 def prepare_data(
     df: pd.DataFrame,
-    target_col: str = 'aqi_target_24h',
+    target_col: str = 'target_24h',
     test_size: float = 0.2
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, list]:
     """
@@ -66,8 +66,9 @@ def prepare_data(
     if 'hour' not in df.columns:
         df, feature_cols, target_cols = compute_all_features(df)
     else:
-        exclude_cols = ['timestamp', 'city']
-        target_cols = [col for col in df.columns if '_target_' in col]
+        exclude_cols = ['timestamp', 'city', 'observation_id', 'event_time']
+        # Match both 'target_Xh' and 'aqi_target_Xh' patterns
+        target_cols = [col for col in df.columns if col.startswith('target_') or '_target_' in col]
         feature_cols = [col for col in df.columns if col not in exclude_cols + target_cols]
     
     # Remove rows with NaN values

@@ -19,7 +19,7 @@ logger = get_logger("training_pipeline")
 
 
 def run_training_pipeline(
-    target_col: str = 'aqi_target_24h',
+    target_col: str = 'target_24h',
     min_samples: int = 100
 ):
     """
