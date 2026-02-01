@@ -11,12 +11,12 @@ from src.training.train import (
     load_training_data, 
     prepare_data, 
     train_all_models, 
-    save_best_model
+    save_best_model,
+    save_all_models
 )
 from src.utils.logger import get_logger
 
 logger = get_logger("training_pipeline")
-
 
 def run_training_pipeline(
     target_col: str = 'target_24h',
@@ -59,10 +59,11 @@ def run_training_pipeline(
         for model_name, (_, metrics) in results.items():
             logger.info(f"  {model_name}: RMSE={metrics['rmse']:.4f}, R²={metrics['r2']:.4f}")
         
-        # Save best model
-        logger.info("Saving best model...")
-        model_path = save_best_model(results)
-        logger.info(f"  ✓ Model saved to: {model_path}")
+        # Save all models to Hopsworks Model Registry
+        logger.info("Saving all models to Hopsworks Model Registry...")
+        saved_models = save_all_models(results, feature_names=feature_names)
+        for model_name, model_path in saved_models.items():
+            logger.info(f"  ✓ {model_name}: {model_path}")
         
         logger.info("Training pipeline completed successfully")
         

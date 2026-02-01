@@ -4,6 +4,8 @@ Model Registry for saving and loading trained models.
 import os
 import json
 import joblib
+import tempfile
+import shutil
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Any, Optional, Union
@@ -13,6 +15,12 @@ try:
     MLFLOW_AVAILABLE = True
 except ImportError:
     MLFLOW_AVAILABLE = False
+
+try:
+    import hopsworks
+    HOPSWORKS_AVAILABLE = True
+except ImportError:
+    HOPSWORKS_AVAILABLE = False
 
 
 class LocalModelRegistry:
@@ -186,20 +194,148 @@ class MLflowModelRegistry:
         return mlflow.sklearn.load_model(model_uri)
 
 
-def get_model_registry(use_mlflow: bool = None) -> Union[LocalModelRegistry, MLflowModelRegistry]:
+class HopsworksModelRegistry:
+    """Hopsworks-based model registry."""
+    
+    def __init__(self):
+        if not HOPSWORKS_AVAILABLE:
+            raise ImportError("Hopsworks is required. Install with: pip install hopsworks")
+        
+        self.project = hopsworks.login()
+        self.mr = self.project.get_model_registry()
+        
+    def save_model(
+        self, 
+        model: Any, 
+        model_name: str, 
+        metrics: Dict[str, float] = None,
+        params: Dict[str, Any] = None,
+        feature_names: list = None,
+        **kwargs
+    ) -> str:
+        """
+        Save a model to Hopsworks Model Registry.
+        
+        Args:
+            model: Trained model object
+            model_name: Name for the model
+            metrics: Evaluation metrics
+            params: Model hyperparameters
+            feature_names: List of feature names
+            
+        Returns:
+            Model version
+        """
+        # Create temp directory for model artifacts
+        with tempfile.TemporaryDirectory() as tmpdir:
+            model_dir = Path(tmpdir)
+            
+            # Save model
+            model_path = model_dir / "model.joblib"
+            joblib.dump(model, model_path)
+            
+            # Save metadata
+            metadata = {
+                'model_name': model_name,
+                'created_at': datetime.now().isoformat(),
+                'metrics': metrics or {},
+                'params': params or {},
+                'feature_names': feature_names or []
+            }
+            
+            metadata_path = model_dir / "metadata.json"
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            # Create model in Hopsworks
+            hw_model = self.mr.python.create_model(
+                name=model_name,
+                metrics=metrics or {},
+                description=f"AQI Predictor - {model_name}"
+            )
+            
+            # Upload model artifacts
+            hw_model.save(str(model_dir))
+            
+            print(f"Model saved to Hopsworks: {model_name} v{hw_model.version}")
+            return f"{model_name}_v{hw_model.version}"
+    
+    def load_model(self, model_name: str, version: int = None) -> Any:
+        """
+        Load a model from Hopsworks Model Registry.
+        
+        Args:
+            model_name: Name of the model
+            version: Version to load (loads latest if not provided)
+            
+        Returns:
+            Loaded model object
+        """
+        if version:
+            hw_model = self.mr.get_model(model_name, version=version)
+        else:
+            # Get latest version
+            hw_model = self.mr.get_model(model_name)
+        
+        # Download model artifacts
+        model_dir = hw_model.download()
+        model_path = Path(model_dir) / "model.joblib"
+        
+        if not model_path.exists():
+            raise ValueError(f"Model file not found in: {model_dir}")
+        
+        return joblib.load(model_path)
+    
+    def get_model_metadata(self, model_name: str, version: int = None) -> Dict[str, Any]:
+        """Get metadata for a model from Hopsworks."""
+        if version:
+            hw_model = self.mr.get_model(model_name, version=version)
+        else:
+            hw_model = self.mr.get_model(model_name)
+        
+        model_dir = hw_model.download()
+        metadata_path = Path(model_dir) / "metadata.json"
+        
+        if metadata_path.exists():
+            with open(metadata_path, 'r') as f:
+                return json.load(f)
+        
+        return {'metrics': hw_model.training_metrics}
+    
+    def list_models(self) -> Dict[str, list]:
+        """List all models in Hopsworks Model Registry."""
+        models = {}
+        
+        for model in self.mr.get_models():
+            if model.name not in models:
+                models[model.name] = []
+            models[model.name].append(model.version)
+        
+        return models
+
+
+def get_model_registry(use_mlflow: bool = None, use_hopsworks: bool = None) -> Union[LocalModelRegistry, MLflowModelRegistry, HopsworksModelRegistry]:
     """
     Factory function to get model registry.
     
     Args:
         use_mlflow: If True, use MLflow. If None, auto-detect.
+        use_hopsworks: If True, use Hopsworks. If None, auto-detect.
         
     Returns:
         Model registry instance
     """
+    # Check for Hopsworks first (preferred for this project)
+    if use_hopsworks is None:
+        use_hopsworks = HOPSWORKS_AVAILABLE and os.getenv("HOPSWORKS_API_KEY") is not None
+    
+    if use_hopsworks:
+        return HopsworksModelRegistry()
+    
     if use_mlflow is None:
         use_mlflow = MLFLOW_AVAILABLE and os.getenv("MLFLOW_TRACKING_URI") is not None
     
     if use_mlflow:
         return MLflowModelRegistry()
-    else:
-        return LocalModelRegistry()
+    
+    return LocalModelRegistry()

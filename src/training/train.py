@@ -160,7 +160,8 @@ def train_all_models(
 
 def save_best_model(
     results: Dict[str, Tuple[Any, Dict[str, float]]],
-    metric: str = 'rmse'
+    metric: str = 'rmse',
+    feature_names: list = None
 ) -> str:
     """
     Save the best performing model.
@@ -168,6 +169,7 @@ def save_best_model(
     Args:
         results: Dictionary of model results
         metric: Metric to use for comparison
+        feature_names: List of feature names used for training
         
     Returns:
         Path to saved model
@@ -185,10 +187,44 @@ def save_best_model(
     model_path = registry.save_model(
         model=best_model,
         model_name=best_model_name,
-        metrics=best_metrics
+        metrics=best_metrics,
+        feature_names=feature_names
     )
     
     return model_path
+
+
+def save_all_models(
+    results: Dict[str, Tuple[Any, Dict[str, float]]],
+    feature_names: list = None
+) -> Dict[str, str]:
+    """
+    Save all trained models to the registry.
+    
+    Args:
+        results: Dictionary of model results
+        feature_names: List of feature names used for training
+        
+    Returns:
+        Dictionary of model names to saved paths
+    """
+    registry = get_model_registry()
+    saved_models = {}
+    
+    for model_name, (model, metrics) in results.items():
+        try:
+            model_path = registry.save_model(
+                model=model,
+                model_name=model_name,
+                metrics=metrics,
+                feature_names=feature_names
+            )
+            saved_models[model_name] = model_path
+            print(f"  Saved {model_name}: {model_path}")
+        except Exception as e:
+            print(f"  Error saving {model_name}: {e}")
+    
+    return saved_models
 
 
 def main():
