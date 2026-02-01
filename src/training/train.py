@@ -22,7 +22,7 @@ from src.training.model_registry import get_model_registry
 
 
 def load_training_data(
-    feature_group_name: str = 'aqi_features',
+    feature_group_name: str = 'islamabad_aqi_features',
     start_date: datetime = None,
     end_date: datetime = None
 ) -> pd.DataFrame:
