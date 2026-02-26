@@ -27,7 +27,7 @@ def load_training_data(
     end_date: datetime = None
 ) -> pd.DataFrame:
     """
-    Load training data from feature store.
+    Load training data from feature store with fallback to local files.
     
     Args:
         feature_group_name: Name of the feature group
@@ -37,13 +37,41 @@ def load_training_data(
     Returns:
         DataFrame with features and targets
     """
-    fs = get_feature_store()
-    df = fs.get_features(feature_group_name, start_date, end_date)
+    # Define local data paths for fallback
+    project_root = Path(__file__).parent.parent.parent
+    local_paths = [
+        project_root / "data" / "processed" / "islamabad_aqi_features_upload.csv",
+        project_root / "data" / "processed" / "islamabad_aqi_features_upload.parquet",
+        project_root / "data" / "processed" / "islamabad_aqi_features_for_upload.parquet",
+        project_root / "data" / "processed" / "islamabad_aqi_features.csv",
+    ]
     
-    if df.empty:
-        raise ValueError("No training data found in feature store")
+    # Try Hopsworks first
+    try:
+        fs = get_feature_store()
+        df = fs.get_features(feature_group_name, start_date, end_date)
+        
+        if not df.empty:
+            print(f"✓ Loaded {len(df)} records from Hopsworks Feature Store")
+            return df
+    except Exception as e:
+        print(f"Warning: Could not connect to Hopsworks: {e}")
+        print("Falling back to local data files...")
     
-    return df
+    # Fallback to local files
+    for local_path in local_paths:
+        if local_path.exists():
+            print(f"Loading data from local file: {local_path}")
+            if local_path.suffix == '.parquet':
+                df = pd.read_parquet(local_path)
+            else:
+                df = pd.read_csv(local_path)
+            
+            if not df.empty:
+                print(f"✓ Loaded {len(df)} records from local file")
+                return df
+    
+    raise ValueError("No training data found in Hopsworks or local files")
 
 
 def prepare_data(

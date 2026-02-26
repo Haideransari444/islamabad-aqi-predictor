@@ -2,6 +2,7 @@
 Training Pipeline - Scheduled script for daily model training.
 """
 import sys
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -18,9 +19,12 @@ from src.utils.logger import get_logger
 
 logger = get_logger("training_pipeline")
 
+
 def run_training_pipeline(
     target_col: str = 'target_24h',
-    min_samples: int = 100
+    min_samples: int = 100,
+    max_retries: int = 3,
+    retry_delay: int = 30
 ):
     """
     Run the training pipeline.
@@ -28,6 +32,8 @@ def run_training_pipeline(
     Args:
         target_col: Target column for prediction
         min_samples: Minimum samples required for training
+        max_retries: Maximum number of retries for data loading
+        retry_delay: Delay between retries in seconds
     """
     logger.info("="*50)
     logger.info("Starting Training Pipeline")
@@ -36,9 +42,25 @@ def run_training_pipeline(
     logger.info("="*50)
     
     try:
-        # Load data
+        # Load data with retry logic
         logger.info("Loading training data...")
-        df = load_training_data()
+        df = None
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                df = load_training_data()
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    logger.warning(f"Attempt {attempt + 1} failed: {e}")
+                    logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+        
+        if df is None:
+            raise last_error or ValueError("Failed to load training data")
+        
         logger.info(f"  ✓ Loaded {len(df)} records")
         
         if len(df) < min_samples:
